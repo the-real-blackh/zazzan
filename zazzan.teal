@@ -1,0 +1,98 @@
+#pragma version 6
+q_safe:
+    txn Fee
+    int 10000
+    <=
+    txn CloseRemainderTo
+    global ZeroAddress
+    == 
+    txn CloseRemainderTo
+    global CreatorAddress
+    ==
+    ||
+    &&
+    txn RekeyTo
+    global ZeroAddress
+    ==
+    &&
+    txn OnCompletion  // UpdateApplication (4) or DeleteApplication (5)
+    int 4
+    >=
+    txn Sender      // then sender must be creator
+    global CreatorAddress
+    !=
+    &&
+    !
+    &&
+    assert
+
+app_calls:
+    txn TypeEnum
+    int 6
+    ==
+    bz app_calls_end
+
+q_on_creation:
+    txn ApplicationID
+    int 0
+    ==
+    bz q_on_creation_end
+
+    pushbytes "init"
+    int 1
+    app_global_put
+
+    int 1
+    return
+
+q_on_creation_end:
+
+    txn ApplicationArgs 0
+    pushbytes "setup"
+    ==
+    bz setup_end
+
+    pushbytes "init"
+    app_global_get
+    txn NumAssets
+    int 2
+    ==
+    &&
+    assert
+
+    pushbytes "init"
+    app_global_del
+
+    itxn_begin
+    int 4
+    itxn_field TypeEnum
+    txn Assets 0
+    itxn_field XferAsset
+    global CurrentApplicationAddress
+    itxn_field AssetReceiver
+    itxn_next
+
+    int 4
+    itxn_field TypeEnum
+    txn Assets 1
+    itxn_field XferAsset
+    global CurrentApplicationAddress
+    itxn_field AssetReceiver
+    itxn_submit
+
+    int 1
+    return
+
+setup_end:
+    err
+
+app_calls_end:
+
+//q_payment:
+//    txn TypeEnum
+//    int 4 
+//    ==
+//    bz succeed
+
+succeed:
+    int 1

@@ -1,0 +1,14 @@
+{
+  "name": "zazzan",
+  "version": "1.0.0",
+  "description": "Zazzan cryptocurrency https://zazzan.org",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Stephen Blackheath",
+  "license": "BSD3",
+  "dependencies": {
+    "algosdk": "^1.19.0"
+  }
+}

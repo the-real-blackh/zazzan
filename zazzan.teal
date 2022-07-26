@@ -97,15 +97,19 @@ q_on_creation_end:
 
 setup_end:
     txn ApplicationArgs 0
-    pushbytes "toZan"
+    pushbytes "toZAN"
     ==
-    bz f2z_end
+    bz toZAN_end
 
+    global GroupSize
+    int 2
+    ==
     // Ensure we are a member of a transaction block where the first transaction is a
     // transfer of fiat to us.
     gtxn 0 TypeEnum
     int 4
     ==
+    &&
     gtxn 0 XferAsset
     pushbytes "fiat"
     app_global_get
@@ -133,7 +137,7 @@ setup_end:
     int 1
     return
 
-f2z_end:
+toZAN_end:
 
     err
 

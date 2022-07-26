@@ -96,62 +96,46 @@ q_on_creation_end:
     return
 
 setup_end:
+    txn ApplicationArgs 0
+    pushbytes "toZan"
+    ==
+    bz f2z_end
+
+    // Ensure we are a member of a transaction block where the first transaction is a
+    // transfer of fiat to us.
+    gtxn 0 TypeEnum
+    int 4
+    ==
+    gtxn 0 XferAsset
+    pushbytes "fiat"
+    app_global_get
+    ==
+    &&
+    gtxn 0 AssetReceiver
+    global CurrentApplicationAddress
+    ==
+    &&
+    assert
+
+    // Transfer an equivalent amount of ZAN back to the sender.
+    itxn_begin
+    int 4
+    itxn_field TypeEnum
+    pushbytes "zan"
+    app_global_get
+    itxn_field XferAsset
+    gtxn 0 AssetAmount
+    itxn_field AssetAmount
+    gtxn 0 Sender
+    itxn_field AssetReceiver
+    itxn_submit
+
+    int 1
+    return
+
+f2z_end:
+
     err
 
 app_calls_end:
-
-q_axfr:
-    txn TypeEnum
-    int 4 
-    ==
-    bz q_axfr_end
-
-    txn XferAsset
-    pushbytes "fiat"
-    app_global_get
-    ==
-    bz not_fiat
-
-    itxn_begin
-    int 4
-    itxn_field TypeEnum
-    pushbytes "zan"
-    app_global_get
-    itxn_field XferAsset
-    txn AssetAmount
-    itxn_field AssetAmount
-    txn Sender
-    itxn_field AssetReceiver
-    itxn_submit
-
-    int 1
-    return
-
-not_fiat:
-
-    txn XferAsset
-    pushbytes "zan"
-    app_global_get
-    ==
-    bz not_zan
-
-    itxn_begin
-    int 4
-    itxn_field TypeEnum
-    pushbytes "fiat"
-    app_global_get
-    itxn_field XferAsset
-    txn AssetAmount
-    itxn_field AssetAmount
-    txn Sender
-    itxn_field AssetReceiver
-    itxn_submit
-
-    int 1
-    return
-
-not_zan:
-
-q_axfr_end:
-
     int 1

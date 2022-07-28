@@ -4,7 +4,7 @@ goal asset send \
     --from $1 \
     --assetid `cat env/$Z_ENV/ZAN-asset-id.txt` \
     --amount $2 \
-    --to `cat zazzan-app-addr.txt` \
+    --to `cat env/$Z_ENV/zazzan-app-addr.txt` \
     -o txn1.out
 goal app call \
     --from $1 \

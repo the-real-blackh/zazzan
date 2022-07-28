@@ -67,7 +67,7 @@ app_calls_end:
 // Initial setup of the application
 app_call_setup:
     txn NumAppArgs
-    int 3
+    int 2
     ==
     txn NumAssets
     int 2
@@ -79,7 +79,7 @@ app_call_setup:
     txn Assets 0
     app_global_put
 
-    pushbytes "fiat"
+    pushbytes "USDC"
     txn Assets 1
     app_global_put
 
@@ -100,14 +100,42 @@ app_call_setup:
     itxn_field AssetReceiver
     itxn_submit
 
-    pushbytes "supply"
+    pushbytes "admFund"
     txn ApplicationArgs 1
-    int 0
-    extract_uint64
     app_global_put
 
-    pushbytes "adminFund"
-    txn ApplicationArgs 2
+    // Things prefixed by c_ can be changed through a vote.
+
+    // Exit tax for conversions of ZAN to fiat in basis points
+    pushbytes "c_exitTax_bp"
+    int 25
+    app_global_put
+
+    // Fraction of the total circulating supply of Zazzans to limit the admin fund to,
+    // in basis points
+    pushbytes "c_admFundFrac_bp"
+    int 100
+    app_global_put
+
+    // The actual cap of the admin fund, calculated from the highest that
+    // c_admFundFrac_bp * circulating supply ever reaches. If the admin fund ever
+    // exceeds this value, then any ZANs added to it are burned.
+    pushbytes "c_admFundCap_Z"
+    int 0
+    app_global_put
+
+    // The cost of an election in Zazzans. At the conclusion of an election, the cost
+    // is distributed to the voters.
+    pushbytes "c_eleCost_Z"
+    int 1000000         // 1 ZAN
+    app_global_put
+
+    // Your voting power is determined by your ZAN balance at the time you vote, but
+    // the voting power is capped at a certain number of ZANs. The idea here is to
+    // prevent individuals, organization or governments with deep pockets buying up
+    // all the voting power.
+    pushbytes "c_votePwrCap_Z"
+    int 10000000000     // 10,000 ZANs
     app_global_put
 
     int 1

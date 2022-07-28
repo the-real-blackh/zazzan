@@ -82,7 +82,7 @@ app_calls_end:
 
 // Output: Asset ID of the ZAN asset
 ZAN_asset:
-    pushbytes "zan"
+    pushbytes "ZAN"
     app_global_get
     retsub
 
@@ -110,17 +110,6 @@ get_sent_value_of_X:
     &&
     swap
     gtxn 0 XferAsset
-    // Transfer an equal amount of fiat back to the sender.
-    itxn_begin
-    gtxn 0 Sender            // recipient
-    callsub fiat_asset       // asset ID
-    callsub ZAN_asset        // amount
-    callsub get_sent_value_of_2
-    callsub send_asset
-    itxn_submit
-
-    int 1
-    return
     ==
     &&
     gtxn 0 AssetReceiver
@@ -142,19 +131,71 @@ send_asset:
     itxn_field TypeEnum
     retsub
 
+fiatToZAN:
+    callsub fiat_balance
+    dig 1         // Subtract the amount just sent, because the balance reported by
+    -             // Algorand is the balance AFTER receiving the new money.
+    dup
+    bnz fiatToZAN_proportion
+
+    pop
+
+    int 10000     // Default valuation if zero ZANs have been issued ever
+    mulw
+    int 6261      // NZD value in USD at time of writing
+    divw
+    retsub
+
+fiatToZAN_proportion:
+    // On stack: amount received / fiat_balance(corrected)
+    swap
+    // On stack: fiat_balance(corrected) / amount received
+    callsub circulating_supply
+    mulw
+    // On stack: fiat_balance(corrected) / amount * circ_supply [msw] / amount * circ_supply [lsw]
+    uncover 2
+    divw
+    retsub
+
 // Convert fiat to ZAN
 app_call_toZAN:
-    // Transfer an equal amount of ZAN back to the sender.
+    // Receiving fiat, transfer ZAN back to the sender.
     itxn_begin
     gtxn 0 Sender            // recipient
     callsub ZAN_asset        // asset ID
     callsub fiat_asset       // amount
     callsub get_sent_value_of_2
+    callsub fiatToZAN
     callsub send_asset
     itxn_submit
 
     int 1
     return
+
+// The amount of ZAN in the dragon's lair - ZAN that isn't in circulation.
+// This is just the App's ZAN balance
+dragons_lair_balance:
+    global CurrentApplicationAddress
+    callsub ZAN_asset
+    asset_holding_get AssetBalance
+    pop                   // Discard the value of whether we are opted into the asset
+    retsub
+
+// Amount of fiat we hold.
+fiat_balance:
+    global CurrentApplicationAddress
+    callsub fiat_asset
+    asset_holding_get AssetBalance
+    pop                   // Discard the value of whether we are opted into the asset
+    retsub
+
+// Return the number of ZANs in circulation
+circulating_supply:
+    pushbytes "supply"    // Get total supply of ZANs in existence
+    app_global_get
+    callsub dragons_lair_balance
+    -
+    retsub
 
 // Convert ZAN to fiat
 app_call_toFiat:
@@ -164,6 +205,8 @@ app_call_toFiat:
     callsub fiat_asset       // asset ID
     callsub ZAN_asset        // amount
     callsub get_sent_value_of_2
+
+
     callsub send_asset
     itxn_submit
 
@@ -179,7 +222,7 @@ app_call_propose:
     ==
     &&
     gtxn 0 ApplicationID
-    global ZeroAddress
+    int 0
     ==
     &&
     gtxn 0 OnCompletion
@@ -188,12 +231,12 @@ app_call_propose:
     &&
     gtxn 0 ApprovalProgram   // ApprovalProgram must be correct so we don't trust unknown code
     sha256
-    byte base64 
+    byte base64 QzYhq9JlYbn2QdOMrhyxVlNtNjeyvyJc/I8d8VAGfGc=   // TO DO: Put real value in here
     ==
     &&
     gtxn 0 ClearStateProgram  // ClearStateProgram must be correct
     sha256
-    byte base64
+    byte base64 QzYhq9JlYbn2QdOMrhyxVlNtNjeyvyJc/I8d8VAGfGc=   // TO DO: Put real value in here
     ==
     &&
     assert
@@ -201,7 +244,7 @@ app_call_propose:
     gaid 0  // Get application ID of the newly created proposal election
     int 0   // loop index
 propose_loop:
-    string "ele__"   // We're about to replace __ with two digits for the loop index 00 -> 99
+    pushbytes "ele__"   // We're about to replace __ with two digits for the loop index 00 -> 99
     int 3   // character index of first digit
     dig 2   // get loop index
     int 10
@@ -215,6 +258,7 @@ propose_loop:
     %
     int 48
     +
+    setbyte 
     dup
     app_global_get
     int 0
@@ -225,7 +269,7 @@ propose_loop:
     int 1   // increment loop index
     +
     dup
-    int 100
+    int 20
     <
     bnz propose_loop
     err     // Fail because all slots are full

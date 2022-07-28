@@ -1,9 +1,10 @@
 #!/bin/sh -e
-#goal asset optin \
-#    --account `cat ../zazzan-admin-fund.txt` \
-#    --assetid 100900625
+if test "$Z_ENV" = "" ; then echo "Please set Z_ENV environment variable" ; false ; fi
+goal asset optin \
+    --account `cat ../env/$Z_ENV/zazzan-admin-fund.txt` \
+    --assetid `cat ../env/$Z_ENV/ZAN-asset-id.txt`
 goal clerk send \
-    --from `cat ../zazzan-admin-fund.txt` \
-    --to `cat ../zazzan-admin-fund.txt` \
+    --from `cat ../env/$Z_ENV/zazzan-admin-fund.txt` \
+    --to `cat ../env/$Z_ENV/zazzan-admin-fund.txt` \
     --amount 0 \
-    --rekey-to `cat ../zazzan-app-addr.txt`
+    --rekey-to `cat ../env/$Z_ENV/zazzan-app-addr.txt`

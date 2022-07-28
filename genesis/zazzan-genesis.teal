@@ -3,6 +3,7 @@ q_safe:
     txn Fee
     int 10000
     <=
+
     txn CloseRemainderTo
     global ZeroAddress
     == 
@@ -11,40 +12,41 @@ q_safe:
     ==
     ||
     &&
+
     txn RekeyTo
     global ZeroAddress
     ==
     &&
+
     txn OnCompletion  // UpdateApplication (4) or DeleteApplication (5)
     int 4
     >=
-    txn Sender      // then sender must be creator
+    txn Sender        // then sender must be creator
     global CreatorAddress
     !=
     &&
     !
     &&
+
     assert
 
 app_calls:
     txn TypeEnum
     int 6
     ==
-    txn OnCompletion   // No-Op or Opt-In, meaning it's either an app creation or an app call
+    txn OnCompletion  // No-Op or Opt-In, meaning it's either an app creation or an app call
     int 2
     <
     &&
     bz app_calls_end
+
+// Code to execute on creation of the application
 
 q_on_creation:
     txn ApplicationID
     int 0
     ==
     bz q_on_creation_end
-
-    pushbytes "init"
-    int 1
-    app_global_put
 
     int 1
     return
@@ -54,20 +56,26 @@ q_on_creation_end:
     txn ApplicationArgs 0
     pushbytes "setup"
     ==
-    bz setup_end
+    bnz app_call_setup
 
-    pushbytes "init"
-    app_global_get
+    err
+
+app_calls_end:
+    int 1
+    return
+
+// Initial setup of the application
+app_call_setup:
+    txn NumAppArgs
+    int 3
+    ==
     txn NumAssets
     int 2
     ==
     &&
     assert
 
-    pushbytes "init"
-    app_global_del
-
-    pushbytes "zan"
+    pushbytes "ZAN"
     txn Assets 0
     app_global_put
 
@@ -92,54 +100,15 @@ q_on_creation_end:
     itxn_field AssetReceiver
     itxn_submit
 
-    int 1
-    return
+    pushbytes "supply"
+    txn ApplicationArgs 1
+    int 0
+    extract_uint64
+    app_global_put
 
-setup_end:
-    txn ApplicationArgs 0
-    pushbytes "toZAN"
-    ==
-    bz toZAN_end
-
-    global GroupSize
-    int 2
-    ==
-    // Ensure we are a member of a transaction block where the first transaction is a
-    // transfer of fiat to us.
-    gtxn 0 TypeEnum
-    int 4
-    ==
-    &&
-    gtxn 0 XferAsset
-    pushbytes "fiat"
-    app_global_get
-    ==
-    &&
-    gtxn 0 AssetReceiver
-    global CurrentApplicationAddress
-    ==
-    &&
-    assert
-
-    // Transfer an equivalent amount of ZAN back to the sender.
-    itxn_begin
-    int 4
-    itxn_field TypeEnum
-    pushbytes "zan"
-    app_global_get
-    itxn_field XferAsset
-    gtxn 0 AssetAmount
-    itxn_field AssetAmount
-    gtxn 0 Sender
-    itxn_field AssetReceiver
-    itxn_submit
+    pushbytes "adminFund"
+    txn ApplicationArgs 2
+    app_global_put
 
     int 1
     return
-
-toZAN_end:
-
-    err
-
-app_calls_end:
-    int 1

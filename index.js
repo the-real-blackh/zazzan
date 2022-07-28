@@ -48,7 +48,7 @@ async function createZAN() {
                 manager: myAccount.addr,
                 unitName: "ZAN",
                 assetName: "Zazzan",
-                url: "https://zazzan.org/",
+                assetURL: "https://zazzan.org",
                 suggestedParams: params
             });
         // Sign the transaction

@@ -1,0 +1,245 @@
+#pragma version 6
+q_safe:
+    txn Fee
+    int 10000
+    <=
+
+    txn CloseRemainderTo
+    global ZeroAddress
+    == 
+    txn CloseRemainderTo
+    global CreatorAddress
+    ==
+    ||
+    &&
+
+    txn RekeyTo
+    global ZeroAddress
+    ==
+    &&
+
+    txn OnCompletion  // UpdateApplication (4) or DeleteApplication (5)
+    int 4
+    >=
+    txn Sender        // then sender must be creator
+    global CreatorAddress
+    !=
+    &&
+    !
+    &&
+
+    assert
+
+app_calls:
+    txn TypeEnum
+    int 6
+    ==
+    txn OnCompletion  // No-Op or Opt-In, meaning it's either an app creation or an app call
+    int 2
+    <
+    &&
+    bz app_calls_end
+
+// Code to execute on creation of the application
+
+q_on_creation:
+    txn ApplicationID
+    int 0
+    ==
+    bz q_on_creation_end
+
+    pushbytes "init"
+    int 1
+    app_global_put
+
+    int 1
+    return
+
+q_on_creation_end:
+
+// Handle the different named app calls
+
+    txn ApplicationArgs 0
+    pushbytes "toZAN"
+    ==
+    bnz app_call_toZAN
+
+    txn ApplicationArgs 0
+    pushbytes "toFiat"
+    ==
+    bnz app_call_toFiat
+
+    txn ApplicationArgs 0
+    pushbytes "propose"
+    ==
+    bnz app_call_propose
+
+    err
+
+app_calls_end:
+    int 1
+    return
+
+// Output: Asset ID of the ZAN asset
+ZAN_asset:
+    pushbytes "zan"
+    app_global_get
+    retsub
+
+// Output: Asset ID of the fiat asset
+fiat_asset:
+    pushbytes "fiat"
+    app_global_get
+    retsub
+
+// Ensures we are a member of a transaction block where the first transaction is a
+// transfer of a specified asset to us.
+// Input: Asset ID
+// Output: Value of said asset that was sent to us
+get_sent_value_of_2:
+    int 2
+// Input: Asset ID / number of transactions asserted to be in the current group
+get_sent_value_of_X:
+    global GroupSize
+    ==
+    // Ensure we are a member of a transaction block where the first transaction is a
+    // transfer of fiat to us.
+    gtxn 0 TypeEnum
+    int 4
+    ==
+    &&
+    swap
+    gtxn 0 XferAsset
+    // Transfer an equal amount of fiat back to the sender.
+    itxn_begin
+    gtxn 0 Sender            // recipient
+    callsub fiat_asset       // asset ID
+    callsub ZAN_asset        // amount
+    callsub get_sent_value_of_2
+    callsub send_asset
+    itxn_submit
+
+    int 1
+    return
+    ==
+    &&
+    gtxn 0 AssetReceiver
+    global CurrentApplicationAddress
+    ==
+    &&
+    assert
+
+    gtxn 0 AssetAmount
+    retsub
+
+// Input: recipient / Asset ID / Amount
+// Output: --
+send_asset:
+    itxn_field AssetAmount
+    itxn_field XferAsset
+    itxn_field AssetReceiver
+    int 4
+    itxn_field TypeEnum
+    retsub
+
+// Convert fiat to ZAN
+app_call_toZAN:
+    // Transfer an equal amount of ZAN back to the sender.
+    itxn_begin
+    gtxn 0 Sender            // recipient
+    callsub ZAN_asset        // asset ID
+    callsub fiat_asset       // amount
+    callsub get_sent_value_of_2
+    callsub send_asset
+    itxn_submit
+
+    int 1
+    return
+
+// Convert ZAN to fiat
+app_call_toFiat:
+    // Transfer an equal amount of fiat back to the sender.
+    itxn_begin
+    gtxn 0 Sender            // recipient
+    callsub fiat_asset       // asset ID
+    callsub ZAN_asset        // amount
+    callsub get_sent_value_of_2
+    callsub send_asset
+    itxn_submit
+
+    int 1
+    return
+
+app_call_propose:
+    global GroupSize
+    int 2
+    ==
+    gtxn 0 TypeEnum
+    int 6
+    ==
+    &&
+    gtxn 0 ApplicationID
+    global ZeroAddress
+    ==
+    &&
+    gtxn 0 OnCompletion
+    int NoOp
+    ==
+    &&
+    gtxn 0 ApprovalProgram   // ApprovalProgram must be correct so we don't trust unknown code
+    sha256
+    byte base64 
+    ==
+    &&
+    gtxn 0 ClearStateProgram  // ClearStateProgram must be correct
+    sha256
+    byte base64
+    ==
+    &&
+    assert
+
+    gaid 0  // Get application ID of the newly created proposal election
+    int 0   // loop index
+propose_loop:
+    string "ele__"   // We're about to replace __ with two digits for the loop index 00 -> 99
+    int 3   // character index of first digit
+    dig 2   // get loop index
+    int 10
+    /
+    int 48
+    +
+    setbyte 
+    int 4   // character index of second digit
+    dig 2   // get loop index
+    int 10
+    %
+    int 48
+    +
+    dup
+    app_global_get
+    int 0
+    ==
+    bnz propose_found_empty_slot
+    pop
+
+    int 1   // increment loop index
+    +
+    dup
+    int 100
+    <
+    bnz propose_loop
+    err     // Fail because all slots are full
+
+// Current stack:
+//   application ID
+//   loop index
+//   field name
+propose_found_empty_slot:
+    swap
+    pop
+    swap
+    // Current stack: field name / application ID
+    app_global_put
+
+    int 1
+    return

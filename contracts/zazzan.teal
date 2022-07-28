@@ -147,12 +147,38 @@ fiatToZAN:
     retsub
 
 fiatToZAN_proportion:
-    // On stack: amount received / fiat_balance(corrected)
+    // On stack: amount received \ fiat_balance(corrected)
     swap
-    // On stack: fiat_balance(corrected) / amount received
+    // On stack: fiat_balance(corrected) \ amount received
     callsub circulating_supply
     mulw
-    // On stack: fiat_balance(corrected) / amount * circ_supply [msw] / amount * circ_supply [lsw]
+    // On stack: fiat_balance(corrected) \ amount * circ_supply [msw] \ amount * circ_supply [lsw]
+    uncover 2
+    divw
+    retsub
+
+ZANToFiat:
+    callsub circulating_supply
+    dig 1         // Add the amount just sent to the circulating supply, because
+    +             // the circulating supply goes down when we receive ZAN, so we
+                  // add it to correct it back to where it was
+    dup
+    bnz ZANToFiat_proportion
+
+    pop   // circulating supply(corrected)
+    pop   // amount received
+
+    // If this is the last of the ZAN, then send it all remaining fiat.
+    callsub fiat_balance
+    retsub
+
+ZANToFiat_proportion:
+    // On stack: amount received \ circulating supply(corrected)
+    swap
+    // On stack: circulating supply(corrected) \ amount received
+    callsub fiat_balance
+    mulw
+    // On stack: circ_supply(corrected) \ amount * fiat_bal [msw] \ amount * fiat_bal [lsw]
     uncover 2
     divw
     retsub
@@ -205,8 +231,7 @@ app_call_toFiat:
     callsub fiat_asset       // asset ID
     callsub ZAN_asset        // amount
     callsub get_sent_value_of_2
-
-
+    callsub ZANToFiat
     callsub send_asset
     itxn_submit
 

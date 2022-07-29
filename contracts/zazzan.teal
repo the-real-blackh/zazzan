@@ -40,23 +40,6 @@ app_calls:
     &&
     bz app_calls_end
 
-// Code to execute on creation of the application
-
-q_on_creation:
-    txn ApplicationID
-    int 0
-    ==
-    bz q_on_creation_end
-
-    pushbytes "init"
-    int 1
-    app_global_put
-
-    int 1
-    return
-
-q_on_creation_end:
-
 // Handle the different named app calls
 
     txn ApplicationArgs 0
@@ -86,9 +69,9 @@ ZAN_asset:
     app_global_get
     retsub
 
-// Output: Asset ID of the fiat asset
-fiat_asset:
-    pushbytes "fiat"
+// Output: Asset ID of the USDC asset
+USDC_asset:
+    pushbytes "USDC"
     app_global_get
     retsub
 
@@ -103,7 +86,7 @@ get_sent_value_of_X:
     global GroupSize
     ==
     // Ensure we are a member of a transaction block where the first transaction is a
-    // transfer of fiat to us.
+    // transfer of USDC to us.
     gtxn 0 TypeEnum
     int 4
     ==
@@ -131,12 +114,12 @@ send_asset:
     itxn_field TypeEnum
     retsub
 
-fiatToZAN:
-    callsub fiat_balance
+USDCToZAN:
+    callsub USDC_balance
     dig 1         // Subtract the amount just sent, because the balance reported by
     -             // Algorand is the balance AFTER receiving the new money.
     dup
-    bnz fiatToZAN_proportion
+    bnz USDCToZAN_proportion
 
     pop
 
@@ -146,13 +129,13 @@ fiatToZAN:
     divw
     retsub
 
-fiatToZAN_proportion:
-    // On stack: amount received \ fiat_balance(corrected)
+USDCToZAN_proportion:
+    // On stack: amount received \ USDC_balance(corrected)
     swap
-    // On stack: fiat_balance(corrected) \ amount received
+    // On stack: USDC_balance(corrected) \ amount received
     callsub circulating_supply
     mulw
-    // On stack: fiat_balance(corrected) \ amount * circ_supply [msw] \ amount * circ_supply [lsw]
+    // On stack: USDC_balance(corrected) \ amount * circ_supply [msw] \ amount * circ_supply [lsw]
     uncover 2
     divw
     retsub
@@ -168,67 +151,97 @@ ZANToFiat:
     pop   // circulating supply(corrected)
     pop   // amount received
 
-    // If this is the last of the ZAN, then send it all remaining fiat.
-    callsub fiat_balance
+    // If this is the last of the ZAN, then send it all remaining USDC.
+    callsub USDC_balance
     retsub
 
 ZANToFiat_proportion:
     // On stack: amount received \ circulating supply(corrected)
     swap
     // On stack: circulating supply(corrected) \ amount received
-    callsub fiat_balance
+    callsub USDC_balance
     mulw
-    // On stack: circ_supply(corrected) \ amount * fiat_bal [msw] \ amount * fiat_bal [lsw]
+    // On stack: circ_supply(corrected) \ amount * USDC_bal [msw] \ amount * USDC_bal [lsw]
     uncover 2
     divw
     retsub
 
-// Convert fiat to ZAN
+// Convert USDC to ZAN
 app_call_toZAN:
-    // Receiving fiat, transfer ZAN back to the sender.
+    // Receiving USDC, transfer ZAN back to the sender.
     itxn_begin
     gtxn 0 Sender            // recipient
     callsub ZAN_asset        // asset ID
-    callsub fiat_asset       // amount
+    callsub USDC_asset       // amount
     callsub get_sent_value_of_2
-    callsub fiatToZAN
+    callsub USDCToZAN
     callsub send_asset
     itxn_submit
+
+    callsub update_adminFundCap
 
     int 1
     return
 
-// The amount of ZAN in the dragon's lair - ZAN that isn't in circulation.
-// This is just the App's ZAN balance
-dragons_lair_balance:
-    global CurrentApplicationAddress
-    callsub ZAN_asset
-    asset_holding_get AssetBalance
-    pop                   // Discard the value of whether we are opted into the asset
+// The admin fund cap is the largest that admFundFrac * circulating supply has
+// ever been. So we calculate it, and update it if it's larger than the present
+// value.
+update_adminFundCap:
+
+    // Calculate admFuncFrac fraction of total circulating supply
+    callsub circulating_supply
+    pushbytes "c_admFundFrac_bp"
+    app_global_get
+    mulw
+    int 10000
+    divw
+
+    dup 
+    pushbytes "c_admFundCap_Z"
+    app_global_get
+    <
+    bnz update_adminFundCap_end
+
+    pushbytes "c_admFundCap_Z"
+    dig 1       // Leave it on the stack to get popped below
+    app_global_put
+
+update_adminFundCap_end:
+    pop
     retsub
 
-// Amount of fiat we hold.
-fiat_balance:
+// Get the total number of ZANs, which equals ZANs in circulation - reserve (dragon's lair)
+total_ZANs:
+    callsub ZAN_asset
+    asset_params_get AssetTotal
+    retsub
+
+// Amount of USDC we hold.
+USDC_balance:
     global CurrentApplicationAddress
-    callsub fiat_asset
+    callsub USDC_asset
     asset_holding_get AssetBalance
     pop                   // Discard the value of whether we are opted into the asset
     retsub
 
 // Return the number of ZANs in circulation
 circulating_supply:
-    pushbytes "supply"    // Get total supply of ZANs in existence
-    app_global_get
-    callsub dragons_lair_balance
+    callsub ZAN_asset
+    asset_params_get AssetTotal
+    pop
+    global CurrentApplicationAddress
+    callsub ZAN_asset
+    asset_holding_get AssetBalance
+    pop                   // Discard the value of whether we are opted into the asset
     -
     retsub
 
-// Convert ZAN to fiat
+// Convert ZAN to USDC
 app_call_toFiat:
-    // Transfer an equal amount of fiat back to the sender.
+    // Transfer USDC back to the sender.
     itxn_begin
     gtxn 0 Sender            // recipient
-    callsub fiat_asset       // asset ID
+    callsub USDC_asset       // asset ID
     callsub ZAN_asset        // amount
     callsub get_sent_value_of_2
     callsub ZANToFiat

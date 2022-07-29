@@ -224,6 +224,18 @@ USDC_balance:
     pop                   // Discard the value of whether we are opted into the asset
     retsub
 
+admin_fund_address:
+    pushbytes "admFund"
+    app_global_get
+    retsub
+
+admin_fund_balance:
+    callsub admin_fund_address
+    callsub ZAN_asset
+    asset_holding_get AssetBalance
+    pop                   // Discard the value of whether we are opted into the asset
+    retsub
+
 // Return the number of ZANs in circulation
 circulating_supply:
     callsub ZAN_asset
@@ -238,18 +250,79 @@ circulating_supply:
 
 // Convert ZAN to USDC
 app_call_toFiat:
+    callsub ZAN_asset        // amount
+    callsub get_sent_value_of_2
+
+    // calculate exit tax
+    dup
+    pushbytes "c_exitTax_bp"
+    app_global_get
+    mulw
+    int 10000
+    divw
+    dup
+    store 0    // store exit tax amount to scratchpad 0
+    -          // subtract from amount received to give amount less tax
+    store 1    // store ZAN amount less exit tax to scratchpad 1
+
     // Transfer USDC back to the sender.
     itxn_begin
     gtxn 0 Sender            // recipient
     callsub USDC_asset       // asset ID
-    callsub ZAN_asset        // amount
-    callsub get_sent_value_of_2
+    load 1                   // Convert the ZANs less tax to fiat
     callsub ZANToFiat
     callsub send_asset
+
+    load 0                   // Add the tax to the admin fund
+    callsub add_to_admin_fund
+
     itxn_submit
 
     int 1
     return
+
+// Send the specified number of ZANs to the admin fund
+add_to_admin_fund:
+    // get admin fund balance into scratchpad 0
+    callsub admin_fund_balance
+    store 2
+
+    // get our cap on admin fund balance into scratchpad 1
+    pushbytes "c_admFundCap_Z"
+    app_global_get
+    store 3
+
+    // is admin fund balance + our caller's ZAN contribution < the cap ?
+    dup
+    load 2
+    +
+    load 3
+    <
+    bnz add_to_admin_fund_send  // Adding it won't exceed cap? Send it all.
+
+    pop
+
+    // Is the admin fund balance as it is now below the cap?
+    load 2
+    load 3
+    <
+    bnz add_to_admin_fund_bal_below_cap
+
+    retsub
+
+add_to_admin_fund_bal_below_cap:
+    // Then send the right amount to bring it up to the cap.
+    load 3
+    load 2
+    -
+
+add_to_admin_fund_send:
+    itxn_next
+
+    callsub admin_fund_address
+    callsub ZAN_asset
+    uncover 2
+    b send_asset
 
 app_call_propose:
     global GroupSize

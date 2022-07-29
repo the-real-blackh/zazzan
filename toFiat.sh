@@ -16,4 +16,4 @@ cat txn1.out txn2.out > txns.out
 goal clerk group -i txns.out -o txngroup.out
 goal clerk sign -i txngroup.out -o txngroup-signed.out
 goal clerk rawsend -f txngroup-signed.out
-rm -f txn1.out txn2.out txns.out txngroup.out txngroup-signed.out
+rm -f txn1.out txn2.out txns.out txngroup.out txngroup-signed.out txngroup-signed.out.rej

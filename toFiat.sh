@@ -11,6 +11,7 @@ goal app call \
     --app-id `cat env/$Z_ENV/zazzan-app-id.txt` \
     --app-arg string:toFiat \
     --foreign-asset `cat env/$Z_ENV/USDC-asset-id.txt`,`cat env/$Z_ENV/ZAN-asset-id.txt` \
+    --app-account `cat env/$Z_ENV/zazzan-admin-fund.txt` \
     -o txn2.out
 cat txn1.out txn2.out > txns.out
 goal clerk group -i txns.out -o txngroup.out

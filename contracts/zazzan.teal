@@ -115,9 +115,12 @@ send_asset:
     retsub
 
 USDCToZAN:
+    // Subtract the amount just sent, because the balance reported by
+    // Algorand is the balance AFTER receiving the new money.
     callsub USDC_balance
-    dig 1         // Subtract the amount just sent, because the balance reported by
-    -             // Algorand is the balance AFTER receiving the new money.
+    callsub USDC_asset            // Amount just sent to us
+    callsub get_sent_value_of_2
+    -
     dup
     bnz USDCToZAN_proportion
 
@@ -140,13 +143,17 @@ USDCToZAN_proportion:
     divw
     retsub
 
-ZANToFiat:
+ZANToUSDC:
+    // Add the amount just sent to the circulating supply, because
+    // the circulating supply we are reading is the amount after the
+    // amount just sent to us has been subtracted from it.
+    // So we add to correct it back to where it was beforehand.
     callsub circulating_supply
-    dig 1         // Add the amount just sent to the circulating supply, because
-    +             // the circulating supply goes down when we receive ZAN, so we
-                  // add it to correct it back to where it was
+    callsub ZAN_asset            // Amount just sent to us
+    callsub get_sent_value_of_2
+    +             
     dup
-    bnz ZANToFiat_proportion
+    bnz ZANToUSDC_proportion
 
     pop   // circulating supply(corrected)
     pop   // amount received
@@ -155,7 +162,7 @@ ZANToFiat:
     callsub USDC_balance
     retsub
 
-ZANToFiat_proportion:
+ZANToUSDC_proportion:
     // On stack: amount received \ circulating supply(corrected)
     swap
     // On stack: circulating supply(corrected) \ amount received
@@ -270,7 +277,7 @@ app_call_toFiat:
     gtxn 0 Sender            // recipient
     callsub USDC_asset       // asset ID
     load 1                   // Convert the ZANs less tax to fiat
-    callsub ZANToFiat
+    callsub ZANToUSDC
     callsub send_asset
 
     load 0                   // Add the tax to the admin fund

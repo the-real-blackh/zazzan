@@ -120,27 +120,31 @@ send_asset:
     retsub
 
 USDCToZAN:
+    // Special case: If the circulating supply of ZAN is zero, then we have to invent
+    // the value of a ZAN
+    callsub circulating_supply
+    bnz USDCToZAN_proportion
+
+    pop                   // Forget the amount we received.
+    callsub USDC_balance  // Instead use whatever the total USDC we have is after
+                          // the amount just added.
+
+    int 10000     // Default valuation if zero ZANs have been issued ever
+    mulw
+    int 6289      // NZD value in USD at time of writing
+    divw
+    retsub
+
+USDCToZAN_proportion:
     // Subtract the amount just sent, because the balance reported by
     // Algorand is the balance AFTER receiving the new money.
     callsub USDC_balance
     callsub USDC_asset            // Amount just sent to us
     callsub get_sent_value_of_2
     -
-    dup
-    bnz USDCToZAN_proportion
-
-    pop
-
-    int 10000     // Default valuation if zero ZANs have been issued ever
-    mulw
-    int 6261      // NZD value in USD at time of writing
-    divw
-    retsub
-
-USDCToZAN_proportion:
-    // On stack: amount received \ USDC_balance(corrected)
+    // On stack: amount of USDC to convert \ USDC_balance(corrected)
     swap
-    // On stack: USDC_balance(corrected) \ amount received
+    // On stack: USDC_balance(corrected) \ amount of USDC to convert
     callsub circulating_supply
     mulw
     // On stack: USDC_balance(corrected) \ amount * circ_supply [msw] \ amount * circ_supply [lsw]
@@ -264,9 +268,9 @@ app_call_burnAF:
     itxn_begin
     callsub admin_fund_address
     itxn_field Sender
-    global CurrentApplicationAddress
-    callsub ZAN_asset
-    callsub admin_fund_balance
+    global CurrentApplicationAddress  // recipient
+    callsub ZAN_asset                 // asset ID
+    callsub admin_fund_balance        // amount
     callsub send_asset
     itxn_submit
 
@@ -282,6 +286,18 @@ app_call_toFiat:
     dup
     pushbytes "c_exitTax_bp"
     app_global_get
+
+    // Special case: If this transaction brings the total ZAN in circulation to zero
+    // then we make the tax rate zero.
+    callsub circulating_supply
+    int 0
+    ==
+    bz app_call_toFiat_normal
+
+    pop    // replace the tax rate with zero
+    int 0
+
+app_call_toFiat_normal:
     mulw
     int 10000
     divw

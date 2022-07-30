@@ -52,6 +52,11 @@ app_calls:
     ==
     bnz app_call_toFiat
 
+    txn ApplicationArgs 0  // Experimental: Burn the admin fund
+    pushbytes "burnAF"
+    ==
+    bnz app_call_burnAF
+
     txn ApplicationArgs 0
     pushbytes "propose"
     ==
@@ -254,6 +259,19 @@ circulating_supply:
     pop                   // Discard the value of whether we are opted into the asset
     -
     retsub
+
+app_call_burnAF:
+    itxn_begin
+    callsub admin_fund_address
+    itxn_field Sender
+    global CurrentApplicationAddress
+    callsub ZAN_asset
+    callsub admin_fund_balance
+    callsub send_asset
+    itxn_submit
+
+    int 1
+    return
 
 // Convert ZAN to USDC
 app_call_toFiat:

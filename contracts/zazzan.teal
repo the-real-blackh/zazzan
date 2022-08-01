@@ -62,6 +62,11 @@ app_calls:
     ==
     bnz app_call_propose
 
+    txn ApplicationArgs 0
+    pushbytes "noop"
+    ==
+    bnz app_call_noop
+
     err
 
 app_calls_end:
@@ -437,5 +442,9 @@ propose_found_empty_slot:
     // Current stack: field name / application ID
     app_global_put
 
+    int 1
+    return
+
+app_call_noop:
     int 1
     return
